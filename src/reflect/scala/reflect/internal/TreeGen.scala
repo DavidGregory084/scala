@@ -707,9 +707,19 @@ abstract class TreeGen {
         rangePos(genpos.source, genpos.start, genpos.point, end)
       }
 
+    def yieldsLastPattern(pat: Tree): Boolean = {
+      (matchVarPattern(pat), matchVarPattern(body)) match {
+        case (Some((patName, _)), Some((bodyName, _))) =>
+          patName == bodyName
+        case _ =>
+          false
+      }
+    }
+
     enums match {
       case (t @ ValFrom(pat, rhs)) :: Nil =>
-        makeCombination(closurePos(t.pos), mapName, rhs, pat, body)
+        if (yieldsLastPattern(pat)) rhs
+        else makeCombination(closurePos(t.pos), mapName, rhs, pat, body)
       case (t @ ValFrom(pat, rhs)) :: (rest @ (ValFrom(_, _) :: _)) =>
         makeCombination(closurePos(t.pos), flatMapName, rhs, pat,
                         mkFor(rest, sugarBody))

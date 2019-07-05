@@ -653,9 +653,9 @@ abstract class TreeGen {
   *  @param fresh        A source of new names
   */
   def mkFor(enums: List[Tree], sugarBody: Tree)(implicit fresh: FreshNameCreator): Tree = {
-    val (mapName, flatMapName, body) = sugarBody match {
-      case Yield(tree) => (nme.map, nme.flatMap, tree)
-      case _           => (nme.foreach, nme.foreach, sugarBody)
+    val (mapName, flatMapName, body, isForYield) = sugarBody match {
+      case Yield(tree) => (nme.map, nme.flatMap, tree, true)
+      case _           => (nme.foreach, nme.foreach, sugarBody, false)
     }
 
     /* make a closure pat => body.
@@ -707,7 +707,11 @@ abstract class TreeGen {
         rangePos(genpos.source, genpos.start, genpos.point, end)
       }
 
-    def yieldsLastPattern(pat: Tree): Boolean = {
+    /* Checks whether the pattern `pat` and the body of the for
+     * comprehension refer to the same variable pattern, i.e.
+     * `for (x <- xs) yield x`
+     */
+    def yieldsPattern(pat: Tree): Boolean = {
       (matchVarPattern(pat), matchVarPattern(body)) match {
         case (Some((patName, _)), Some((bodyName, _))) =>
           patName == bodyName
@@ -718,7 +722,7 @@ abstract class TreeGen {
 
     enums match {
       case (t @ ValFrom(pat, rhs)) :: Nil =>
-        if (yieldsLastPattern(pat)) rhs
+        if (isForYield && yieldsPattern(pat)) rhs
         else makeCombination(closurePos(t.pos), mapName, rhs, pat, body)
       case (t @ ValFrom(pat, rhs)) :: (rest @ (ValFrom(_, _) :: _)) =>
         makeCombination(closurePos(t.pos), flatMapName, rhs, pat,

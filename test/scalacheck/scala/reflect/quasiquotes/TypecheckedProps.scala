@@ -22,8 +22,27 @@ object TypecheckedProps extends QuasiquoteProperties("typechecked")
     assert(body1 ≈ body)
   }
 
+  property("for-yield single enum eliminated") = test {
+    val enums = fq"x <- xs" :: Nil
+    val body = q"x"
+    val xs = q"val xs = List(1, 2, 3)"
+    val expected = q"xs"
+    val q"$_; $actual" = typecheck(q"$xs; for (..$enums) yield $body")
+    assert(actual ≈ expected)
+  }
+
+  property("for-yield eliminate final map") = test {
+    val enums = fq"x <- xs" :: fq"y <- ys" :: Nil
+    val body = q"y"
+    val xs = q"val xs = List(1, 2, 3)"
+    val ys = q"val ys = List(4, 5, 6)"
+    val q"$_; $_; $expected" = typecheck(q"$xs; $ys; xs.flatMap(x => ys)")
+    val q"$_; $_; $actual" = typecheck(q"$xs; $ys; for (..$enums) yield $body")
+    assert(actual ≈ expected)
+  }
+
   property("for .filter instead of .withFilter") = test {
-    val enums = fq"foo <- new Foo" :: fq"if foo != null" :: Nil
+    val enums = fq"foo <- new Foo" :: fq"bar = foo" :: fq"if bar != null" :: Nil
     val body = q"foo"
     val q"$_; for(..$enums1) yield $body1" = typecheck(q"""
       class Foo { def map(f: Any => Any) = this; def withFilter(cond: Any => Boolean) = this }

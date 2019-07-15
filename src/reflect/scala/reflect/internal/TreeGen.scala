@@ -716,24 +716,18 @@ abstract class TreeGen {
       case (t @ ValFrom(pat, rhs)) :: Filter(test) :: rest =>
         mkFor(ValFrom(pat, makeCombination(rhs.pos union test.pos, nme.withFilter, rhs, pat.duplicate, test)).setPos(t.pos) :: rest, sugarBody)
       case (t @ ValFrom(pat, rhs)) :: rest =>
-        val valeqs = rest.take(definitions.MaxTupleArity - 1).takeWhile { ValEq.unapply(_).nonEmpty }
+        val valeqs = rest.takeWhile { ValEq.unapply(_).nonEmpty }
+        val lastValFrom = !rest.exists { ValFrom.unapply(_).nonEmpty }
         assert(!valeqs.isEmpty)
         val rest1 = rest.drop(valeqs.length)
         val pats = valeqs map { case ValEq(pat, _) => pat }
         val rhss = valeqs map { case ValEq(_, rhs) => rhs }
-        val defpat1 = makeBind(pat)
         val defpats = pats map makeBind
         val pdefs = defpats.lazyZip(rhss).flatMap(mkPatDef)
-        val ids = (defpat1 :: defpats) map makeValue
-        val rhs1 = mkFor(
-          List(ValFrom(defpat1, rhs).setPos(t.pos)),
-          Yield(Block(pdefs, atPos(wrappingPos(ids)) { mkTuple(ids) }) setPos wrappingPos(pdefs)))
-        val allpats = (pat :: pats) map (_.duplicate)
-        val pos1 =
-          if (t.pos == NoPosition) NoPosition
-          else rangePos(t.pos.source, t.pos.start, t.pos.point, rhs1.pos.end)
-        val vfrom1 = ValFrom(atPos(wrappingPos(allpats)) { mkTuple(allpats) }, rhs1).setPos(pos1)
-        mkFor(vfrom1 :: rest1, sugarBody)
+        val blockBody = if (rest1.isEmpty) body else mkFor(rest1, sugarBody)
+        val block = Block(pdefs, blockBody).setPos(t.pos)
+        val name = if (lastValFrom) mapName else flatMapName
+        makeCombination(closurePos(t.pos), name, rhs, pat, block)
       case _ =>
         EmptyTree //may happen for erroneous input
 
